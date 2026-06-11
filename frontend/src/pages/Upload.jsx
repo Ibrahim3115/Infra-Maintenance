@@ -1,9 +1,14 @@
-import { useState } from "react";
+import { useState, useContext } from "react";
+import { useNavigate } from "react-router-dom";
+import { AnalysisContext } from "../context/AnalysisContext";
 
 function Upload() {
   const [csvFile, setCsvFile] = useState(null);
   const [jsonFile, setJsonFile] = useState(null);
-  const [result, setResult] = useState(null);
+
+  const { setAnalysisResult } = useContext(AnalysisContext);
+
+  const navigate = useNavigate();
 
   const handleAnalyze = async () => {
     if (!csvFile || !jsonFile) {
@@ -25,7 +30,10 @@ function Upload() {
       );
 
       const data = await response.json();
-      setResult(data);
+
+      setAnalysisResult(data);
+
+      navigate("/results");
     } catch (error) {
       console.error(error);
       alert("Backend connection failed");
@@ -38,6 +46,7 @@ function Upload() {
 
       <div style={{ marginTop: "20px" }}>
         <h3>Upload Intended Inventory (CSV)</h3>
+
         <input
           type="file"
           accept=".csv"
@@ -47,6 +56,7 @@ function Upload() {
 
       <div style={{ marginTop: "20px" }}>
         <h3>Upload Live Inventory (JSON)</h3>
+
         <input
           type="file"
           accept=".json"
@@ -55,18 +65,11 @@ function Upload() {
       </div>
 
       <button
-        onClick={handleAnalyze}
         style={{ marginTop: "20px" }}
+        onClick={handleAnalyze}
       >
         Analyze Inventory
       </button>
-
-      {result && (
-        <div style={{ marginTop: "20px" }}>
-          <h3>Response</h3>
-          <pre>{JSON.stringify(result, null, 2)}</pre>
-        </div>
-      )}
     </div>
   );
 }
