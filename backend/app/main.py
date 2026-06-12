@@ -1,10 +1,10 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes.upload import router as upload_router
 from app.routes.auth import router as auth_router
 from dotenv import load_dotenv
 import os
-from app.database import engine, Base
+from app.database import engine, Base, SessionLocal
 from app.models import ReconciliationRun
 from sqlalchemy import text
 
@@ -45,4 +45,15 @@ app.include_router(upload_router)
 
 @app.get("/")
 def root():
-    return {"message": "IM-07 API Running"}
+    return {"message": "IM-07 API Running"}
+
+
+@app.get("/health")
+def health_check():
+    try:
+        db = SessionLocal()
+        db.execute(text("SELECT 1"))
+        db.close()
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Database connection failed: {str(e)}")
+    return {"status": "healthy", "database": "connected"}
