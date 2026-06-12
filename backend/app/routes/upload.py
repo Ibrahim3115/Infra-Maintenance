@@ -1,32 +1,72 @@
-from fastapi import APIRouter, UploadFile, File, Depends, HTTPException
+from fastapi import APIRouter, UploadFile, File, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 import csv
 import json
 from io import StringIO
 from app.services.gemini_service import generate_ai_insights
 from app.database import get_db, SessionLocal
-from app.models import ReconciliationRun
+from app.models import ReconciliationRun, User
 from sqlalchemy.orm import Session
 from app.services.pdf_service import generate_pdf_report
+from app.auth_utils import get_current_user, oauth2_scheme, SECRET_KEY, ALGORITHM
+import jwt
 
 router = APIRouter()
 
 
 @router.get("/history")
-def get_history(db: Session = Depends(get_db)):
-    runs = db.query(ReconciliationRun).order_by(ReconciliationRun.created_at.desc()).all()
+def get_history(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    runs = db.query(ReconciliationRun).filter(
+        ReconciliationRun.user_id == current_user.id
+    ).order_by(ReconciliationRun.created_at.desc()).all()
     return runs
 
 
 @router.get("/history/latest")
-def get_latest(db: Session = Depends(get_db)):
-    run = db.query(ReconciliationRun).order_by(ReconciliationRun.created_at.desc()).first()
+def get_latest(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    run = db.query(ReconciliationRun).filter(
+        ReconciliationRun.user_id == current_user.id
+    ).order_by(ReconciliationRun.created_at.desc()).first()
     return run
 
 
 @router.get("/report/{run_id}")
-def get_pdf_report(run_id: int, db: Session = Depends(get_db)):
-    run = db.query(ReconciliationRun).filter(ReconciliationRun.id == run_id).first()
+def get_pdf_report(
+    run_id: int,
+    token: str = Query(None),
+    db: Session = Depends(get_db),
+    header_token: str = Depends(oauth2_scheme)
+):
+    actual_token = token or header_token
+    credentials_exception = HTTPException(
+        status_code=401,
+        detail="Could not validate credentials",
+        headers={"WWW-Authenticate": "Bearer"},
+    )
+    if not actual_token:
+        raise credentials_exception
+    try:
+        payload = jwt.decode(actual_token, SECRET_KEY, algorithms=[ALGORITHM])
+        username: str = payload.get("sub")
+        if username is None:
+            raise credentials_exception
+    except jwt.PyJWTError:
+        raise credentials_exception
+    
+    current_user = db.query(User).filter(User.username == username).first()
+    if not current_user:
+        raise credentials_exception
+
+    run = db.query(ReconciliationRun).filter(
+        ReconciliationRun.id == run_id,
+        ReconciliationRun.user_id == current_user.id
+    ).first()
     if not run:
         raise HTTPException(status_code=404, detail="Reconciliation run not found.")
     
@@ -41,7 +81,8 @@ def get_pdf_report(run_id: int, db: Session = Depends(get_db)):
 @router.post("/analyze")
 async def analyze_inventory(
     csv_file: UploadFile = File(...),
-    json_file: UploadFile = File(...)
+    json_file: UploadFile = File(...),
+    current_user: User = Depends(get_current_user)
 ):
     try:
         # Read CSV
@@ -121,7 +162,8 @@ async def analyze_inventory(
                 missing_assets=missing_assets,
                 extra_assets=extra_assets,
                 naming_mismatches=naming_mismatches,
-                gemini_recommended_actions=gemini_analysis.get("recommended_actions", [])
+                gemini_recommended_actions=gemini_analysis.get("recommended_actions", []),
+                user_id=current_user.id
             )
             db.add(db_run)
             db.commit()

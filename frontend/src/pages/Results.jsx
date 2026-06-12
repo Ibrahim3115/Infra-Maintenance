@@ -1,12 +1,14 @@
 import { useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnalysisContext } from "../context/AnalysisContext";
+import { AuthContext } from "../context/AuthContext";
 import PageContainer from "../components/PageContainer";
 import TableCard from "../components/TableCard";
 import EmptyState from "../components/EmptyState";
 
 function Results() {
   const { analysisResult, clearAnalysisResult } = useContext(AnalysisContext);
+  const { token } = useContext(AuthContext);
   const navigate = useNavigate();
 
   const getFallbackInsights = (result) => {
@@ -99,7 +101,7 @@ function Results() {
       alert("No database Run ID found for this audit. Make sure the run was successfully saved.");
       return;
     }
-    window.open(`http://127.0.0.1:8000/report/${analysisResult.id}`, "_blank");
+    window.open(`http://127.0.0.1:8000/report/${analysisResult.id}?token=${token}`, "_blank");
   };
 
   const headerActions = (

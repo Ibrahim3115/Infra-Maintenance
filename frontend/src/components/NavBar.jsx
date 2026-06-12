@@ -1,11 +1,14 @@
 import { NavLink, useNavigate } from "react-router-dom";
 import { useContext, useState } from "react";
 import { AnalysisContext } from "../context/AnalysisContext";
+import { AuthContext } from "../context/AuthContext";
 
 function NavBar() {
   const { analysisResult, clearAnalysisResult } = useContext(AnalysisContext);
+  const { user, isAuthenticated, logout } = useContext(AuthContext);
   const navigate = useNavigate();
   const [isClearHovered, setIsClearHovered] = useState(false);
+  const [isLogoutHovered, setIsLogoutHovered] = useState(false);
 
   const linkStyle = ({ isActive }) => ({
     color: isActive ? "var(--primary)" : "var(--text-muted)",
@@ -22,6 +25,14 @@ function NavBar() {
     if (window.confirm("Are you sure you want to clear all reconciliation results?")) {
       clearAnalysisResult();
       navigate("/");
+    }
+  };
+
+  const handleLogout = () => {
+    if (window.confirm("Are you sure you want to log out?")) {
+      clearAnalysisResult();
+      logout();
+      navigate("/login");
     }
   };
 
@@ -49,7 +60,7 @@ function NavBar() {
           gap: "10px",
           cursor: "pointer",
         }}
-        onClick={() => navigate("/")}
+        onClick={() => navigate(isAuthenticated ? "/" : "/login")}
       >
         <div
           style={{
@@ -63,7 +74,7 @@ function NavBar() {
             color: "#ffffff",
             fontWeight: "800",
             fontSize: "16px",
-            boxShadow: "0 2px 4px rgba(37, 99, 235, 0.2)",
+            boxShadow: "0 2px 4px rgba(37, 99, 235, 0.25)",
           }}
         >
           IM
@@ -79,38 +90,101 @@ function NavBar() {
           Reconciler <span style={{ color: "var(--text-muted)", fontWeight: "400", fontSize: "14px" }}>IM-07</span>
         </div>
       </div>
-      <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-        <NavLink to="/" style={linkStyle}>
-          Dashboard
-        </NavLink>
-        <NavLink to="/upload" style={linkStyle}>
-          Upload
-        </NavLink>
-        <NavLink to="/results" style={linkStyle}>
-          Results
-        </NavLink>
-        {analysisResult && (
-          <button
-            onClick={handleClear}
-            onMouseEnter={() => setIsClearHovered(true)}
-            onMouseLeave={() => setIsClearHovered(false)}
+
+      {isAuthenticated && (
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <NavLink to="/" style={linkStyle}>
+            Dashboard
+          </NavLink>
+          <NavLink to="/upload" style={linkStyle}>
+            Upload
+          </NavLink>
+          <NavLink to="/results" style={linkStyle}>
+            Results
+          </NavLink>
+          
+          {analysisResult && (
+            <button
+              onClick={handleClear}
+              onMouseEnter={() => setIsClearHovered(true)}
+              onMouseLeave={() => setIsClearHovered(false)}
+              style={{
+                marginLeft: "8px",
+                padding: "8px 16px",
+                backgroundColor: isClearHovered ? "var(--color-missing-bg)" : "transparent",
+                color: "var(--color-missing)",
+                border: "1px solid var(--color-missing-border)",
+                borderRadius: "var(--radius-sm)",
+                fontSize: "14px",
+                fontWeight: "600",
+                cursor: "pointer",
+                transition: "all var(--transition-fast)",
+              }}
+            >
+              Clear Results
+            </button>
+          )}
+
+          {/* User Profile avatar info */}
+          <div
             style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "8px",
               marginLeft: "16px",
-              padding: "8px 16px",
-              backgroundColor: isClearHovered ? "var(--color-missing)" : "transparent",
-              color: isClearHovered ? "#ffffff" : "var(--color-missing)",
-              border: "1px solid var(--color-missing-border)",
-              borderRadius: "var(--radius-sm)",
-              fontSize: "14px",
-              fontWeight: "600",
-              cursor: "pointer",
-              transition: "all var(--transition-fast)",
+              paddingLeft: "16px",
+              borderLeft: "1px solid var(--border-color)",
             }}
           >
-            Clear Results
-          </button>
-        )}
-      </div>
+            <div
+              style={{
+                width: "28px",
+                height: "28px",
+                borderRadius: "50%",
+                backgroundColor: "var(--primary-light)",
+                color: "var(--primary)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontWeight: "700",
+                fontSize: "12px",
+                border: "1px solid rgba(37, 99, 235, 0.15)",
+                userSelect: "none",
+              }}
+            >
+              {user?.username ? user.username.substring(0, 2).toUpperCase() : "US"}
+            </div>
+            <span
+              style={{
+                fontSize: "14px",
+                fontWeight: "600",
+                color: "var(--text-main)",
+                marginRight: "8px",
+              }}
+            >
+              {user?.username || "User"}
+            </span>
+            <button
+              onClick={handleLogout}
+              onMouseEnter={() => setIsLogoutHovered(true)}
+              onMouseLeave={() => setIsLogoutHovered(false)}
+              style={{
+                padding: "8px 16px",
+                backgroundColor: isLogoutHovered ? "var(--color-missing)" : "transparent",
+                color: isLogoutHovered ? "#ffffff" : "var(--text-muted)",
+                border: isLogoutHovered ? "1px solid var(--color-missing)" : "1px solid var(--border-color)",
+                borderRadius: "var(--radius-sm)",
+                fontSize: "14px",
+                fontWeight: "600",
+                cursor: "pointer",
+                transition: "all var(--transition-fast)",
+              }}
+            >
+              Sign Out
+            </button>
+          </div>
+        </div>
+      )}
     </nav>
   );
 }

@@ -1,6 +1,7 @@
 import { useState, useContext } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnalysisContext } from "../context/AnalysisContext";
+import { AuthContext } from "../context/AuthContext";
 import PageContainer from "../components/PageContainer";
 import LoadingSpinner from "../components/LoadingSpinner";
 
@@ -12,6 +13,7 @@ function Upload() {
   const [isLoading, setIsLoading] = useState(false);
 
   const { setAnalysisResult } = useContext(AnalysisContext);
+  const { token } = useContext(AuthContext);
   const navigate = useNavigate();
 
   const handleCsvDrag = (e) => {
@@ -86,6 +88,9 @@ function Upload() {
     try {
       const response = await fetch("http://127.0.0.1:8000/analyze", {
         method: "POST",
+        headers: {
+          Authorization: `Bearer ${token}`
+        },
         body: formData,
       });
 

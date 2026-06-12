@@ -1,6 +1,17 @@
-from sqlalchemy import Column, Integer, String, Text, DateTime, JSON
+from sqlalchemy import Column, Integer, String, Text, DateTime, JSON, ForeignKey
+from sqlalchemy.orm import relationship
 from datetime import datetime
 from app.database import Base
+
+class User(Base):
+    __tablename__ = "users"
+
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(50), unique=True, index=True, nullable=False)
+    email = Column(String(100), unique=True, index=True, nullable=False)
+    hashed_password = Column(String(255), nullable=False)
+
+    runs = relationship("ReconciliationRun", back_populates="user", cascade="all, delete-orphan")
 
 class ReconciliationRun(Base):
     __tablename__ = "reconciliation_runs"
@@ -20,3 +31,8 @@ class ReconciliationRun(Base):
     extra_assets = Column(JSON, nullable=True)
     naming_mismatches = Column(JSON, nullable=True)
     gemini_recommended_actions = Column(JSON, nullable=True)
+
+    # Link run to user
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=True)
+    user = relationship("User", back_populates="runs")
+

@@ -1,5 +1,6 @@
 import { useContext, useState, useEffect } from "react";
 import { AnalysisContext } from "../context/AnalysisContext";
+import { AuthContext } from "../context/AuthContext";
 import { Link } from "react-router-dom";
 import PageContainer from "../components/PageContainer";
 import StatCard from "../components/StatCard";
@@ -70,6 +71,7 @@ const CustomBarTooltip = ({ active, payload, label }) => {
 
 function Dashboard() {
   const { analysisResult, clearAnalysisResult } = useContext(AnalysisContext);
+  const { token, user } = useContext(AuthContext);
   const [latestRun, setLatestRun] = useState(null);
   const [history, setHistory] = useState([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -82,15 +84,20 @@ function Dashboard() {
         setIsLoading(true);
         setError(null);
 
+        const headers = {};
+        if (token) {
+          headers["Authorization"] = `Bearer ${token}`;
+        }
+
         // Fetch latest run
-        const latestResponse = await fetch("http://127.0.0.1:8000/history/latest");
+        const latestResponse = await fetch("http://127.0.0.1:8000/history/latest", { headers });
         if (!latestResponse.ok) {
           throw new Error("Failed to communicate with inventory database history API.");
         }
         const latestData = await latestResponse.json();
 
         // Fetch history
-        const historyResponse = await fetch("http://127.0.0.1:8000/history");
+        const historyResponse = await fetch("http://127.0.0.1:8000/history", { headers });
         if (!historyResponse.ok) {
           throw new Error("Failed to retrieve inventory reconciliation audit log.");
         }
@@ -111,11 +118,13 @@ function Dashboard() {
       }
     };
 
-    fetchData();
+    if (token) {
+      fetchData();
+    }
     return () => {
       active = false;
     };
-  }, []);
+  }, [token]);
 
   const activeRun = analysisResult || latestRun;
 
@@ -224,7 +233,7 @@ function Dashboard() {
   return (
     <PageContainer
       title="Inventory Reconciliation Dashboard"
-      subtitle="Overview of matching and discrepancies between CMDB records and live environments"
+      subtitle={user ? `Welcome back, ${user.username}! Overview of matching and discrepancies between CMDB records and live environments.` : "Overview of matching and discrepancies between CMDB records and live environments"}
       action={actionButton}
     >
       {/* Metric Stat Cards */}

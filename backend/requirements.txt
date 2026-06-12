@@ -18,3 +18,5 @@ python-dotenv==1.0.1
 SQLAlchemy==2.0.38
 psycopg2-binary==2.9.10
 reportlab==4.3.1
+pyjwt==2.10.1
+bcrypt==4.2.0
