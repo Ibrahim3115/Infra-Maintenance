@@ -102,6 +102,9 @@ function NavBar() {
           <NavLink to="/results" style={linkStyle}>
             Results
           </NavLink>
+          <NavLink to="/history" style={linkStyle}>
+            History
+          </NavLink>
           
           {analysisResult && (
             <button

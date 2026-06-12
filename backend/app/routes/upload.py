@@ -36,6 +36,21 @@ def get_latest(
     return run
 
 
+@router.get("/history/{run_id}")
+def get_run_details(
+    run_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    run = db.query(ReconciliationRun).filter(
+        ReconciliationRun.id == run_id,
+        ReconciliationRun.user_id == current_user.id
+    ).first()
+    if not run:
+        raise HTTPException(status_code=404, detail="Reconciliation run not found.")
+    return run
+
+
 @router.get("/report/{run_id}")
 def get_pdf_report(
     run_id: int,
