@@ -1,10 +1,417 @@
-import { useContext } from "react";
+import { useContext, useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { AnalysisContext } from "../context/AnalysisContext";
 import { AuthContext } from "../context/AuthContext";
 import PageContainer from "../components/PageContainer";
 import TableCard from "../components/TableCard";
 import EmptyState from "../components/EmptyState";
+
+// ─── Suggestion chips shown before the first message ─────────────────────────
+const SUGGESTION_CHIPS = [
+  "Why is this audit high risk?",
+  "What should I do about missing assets?",
+  "Explain the naming mismatches.",
+  "What are the recommended actions?",
+  "Is this environment critical?",
+];
+
+// ─── Copilot Chat Panel ───────────────────────────────────────────────────────
+function CopilotPanel({ runId, token }) {
+  const [messages, setMessages] = useState([
+    {
+      role: "assistant",
+      text: "Hello! I'm your **AI Infrastructure Copilot**. Ask me anything about this reconciliation audit — discrepancies, risk level, or remediation steps.",
+    },
+  ]);
+  const [input, setInput] = useState("");
+  const [loading, setLoading] = useState(false);
+  const bottomRef = useRef(null);
+
+  useEffect(() => {
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages, loading]);
+
+  const sendMessage = async (question) => {
+    const q = (question || input).trim();
+    if (!q || loading) return;
+    setInput("");
+
+    setMessages((prev) => [...prev, { role: "user", text: q }]);
+    setLoading(true);
+
+    try {
+      const res = await fetch("http://127.0.0.1:8000/copilot/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ run_id: runId, question: q }),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.detail || "Failed to get a response.");
+      }
+
+      const data = await res.json();
+      setMessages((prev) => [...prev, { role: "assistant", text: data.answer }]);
+    } catch (err) {
+      setMessages((prev) => [
+        ...prev,
+        {
+          role: "assistant",
+          text: `⚠️ ${err.message || "An error occurred. Please try again."}`,
+          isError: true,
+        },
+      ]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleKeyDown = (e) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage();
+    }
+  };
+
+  // Render markdown-lite: bold (**text**) and bullet lists
+  const renderText = (text) => {
+    const parts = text.split(/(\*\*[^*]+\*\*)/g);
+    return parts.map((part, i) => {
+      if (part.startsWith("**") && part.endsWith("**")) {
+        return <strong key={i}>{part.slice(2, -2)}</strong>;
+      }
+      // Render bullet lines
+      const lines = part.split("\n");
+      return (
+        <span key={i}>
+          {lines.map((line, j) => {
+            if (line.trimStart().startsWith("- ")) {
+              return (
+                <span key={j} style={{ display: "block", paddingLeft: "16px", position: "relative" }}>
+                  <span style={{ position: "absolute", left: "4px", color: "var(--primary)" }}>•</span>
+                  {line.trimStart().slice(2)}
+                </span>
+              );
+            }
+            return (
+              <span key={j}>
+                {j > 0 && <br />}
+                {line}
+              </span>
+            );
+          })}
+        </span>
+      );
+    });
+  };
+
+  const showSuggestions = messages.length === 1;
+
+  return (
+    <div
+      style={{
+        backgroundColor: "var(--bg-card)",
+        border: "1px solid var(--border-color)",
+        borderRadius: "var(--radius-lg)",
+        boxShadow: "var(--shadow-sm)",
+        overflow: "hidden",
+        marginBottom: "36px",
+        display: "flex",
+        flexDirection: "column",
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "center",
+          gap: "10px",
+          padding: "20px 24px",
+          borderBottom: "1px solid var(--border-color)",
+          background: "linear-gradient(135deg, #1e1b4b 0%, #312e81 100%)",
+        }}
+      >
+        <span style={{ fontSize: "20px" }}>🤖</span>
+        <div>
+          <h3
+            style={{
+              fontSize: "16px",
+              fontWeight: "700",
+              color: "#ffffff",
+              margin: 0,
+              letterSpacing: "-0.25px",
+            }}
+          >
+            AI Infrastructure Copilot
+          </h3>
+          <p style={{ fontSize: "12px", color: "rgba(255,255,255,0.65)", margin: 0, marginTop: "2px" }}>
+            Powered by Google Gemini · Context-aware audit assistant
+          </p>
+        </div>
+        <div
+          style={{
+            marginLeft: "auto",
+            display: "flex",
+            alignItems: "center",
+            gap: "6px",
+            fontSize: "11px",
+            fontWeight: "600",
+            color: "#4ade80",
+          }}
+        >
+          <span
+            style={{
+              width: "7px",
+              height: "7px",
+              borderRadius: "50%",
+              backgroundColor: "#4ade80",
+              boxShadow: "0 0 6px #4ade80",
+            }}
+          />
+          ONLINE
+        </div>
+      </div>
+
+      {/* Messages */}
+      <div
+        style={{
+          padding: "20px 24px",
+          minHeight: "240px",
+          maxHeight: "420px",
+          overflowY: "auto",
+          display: "flex",
+          flexDirection: "column",
+          gap: "16px",
+          backgroundColor: "#fafbfc",
+        }}
+      >
+        {messages.map((msg, idx) => (
+          <div
+            key={idx}
+            style={{
+              display: "flex",
+              justifyContent: msg.role === "user" ? "flex-end" : "flex-start",
+            }}
+          >
+            {msg.role === "assistant" && (
+              <div
+                style={{
+                  width: "28px",
+                  height: "28px",
+                  borderRadius: "50%",
+                  background: "linear-gradient(135deg, #4f46e5, #7c3aed)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "13px",
+                  flexShrink: 0,
+                  marginRight: "10px",
+                  marginTop: "2px",
+                  boxShadow: "0 2px 6px rgba(79,70,229,0.35)",
+                }}
+              >
+                🤖
+              </div>
+            )}
+            <div
+              style={{
+                maxWidth: "78%",
+                padding: "12px 16px",
+                borderRadius: msg.role === "user" ? "18px 18px 4px 18px" : "4px 18px 18px 18px",
+                backgroundColor: msg.role === "user"
+                  ? "var(--primary)"
+                  : msg.isError
+                  ? "var(--color-missing-bg)"
+                  : "#ffffff",
+                color: msg.role === "user" ? "#ffffff" : msg.isError ? "var(--color-missing)" : "var(--text-main)",
+                fontSize: "13.5px",
+                lineHeight: "1.65",
+                fontWeight: "500",
+                boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
+                border: msg.role === "assistant" && !msg.isError ? "1px solid var(--border-color)" : "none",
+              }}
+            >
+              {renderText(msg.text)}
+            </div>
+          </div>
+        ))}
+
+        {/* Typing indicator */}
+        {loading && (
+          <div style={{ display: "flex", alignItems: "flex-start", gap: "10px" }}>
+            <div
+              style={{
+                width: "28px",
+                height: "28px",
+                borderRadius: "50%",
+                background: "linear-gradient(135deg, #4f46e5, #7c3aed)",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                fontSize: "13px",
+                flexShrink: 0,
+                boxShadow: "0 2px 6px rgba(79,70,229,0.35)",
+              }}
+            >
+              🤖
+            </div>
+            <div
+              style={{
+                padding: "12px 18px",
+                borderRadius: "4px 18px 18px 18px",
+                backgroundColor: "#ffffff",
+                border: "1px solid var(--border-color)",
+                boxShadow: "0 1px 4px rgba(0,0,0,0.08)",
+                display: "flex",
+                gap: "5px",
+                alignItems: "center",
+              }}
+            >
+              {[0, 1, 2].map((i) => (
+                <span
+                  key={i}
+                  style={{
+                    width: "7px",
+                    height: "7px",
+                    borderRadius: "50%",
+                    backgroundColor: "var(--primary)",
+                    animation: `bounce 1.2s ease-in-out ${i * 0.2}s infinite`,
+                    display: "inline-block",
+                  }}
+                />
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Suggestion chips */}
+        {showSuggestions && !loading && (
+          <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginTop: "4px" }}>
+            {SUGGESTION_CHIPS.map((chip) => (
+              <button
+                key={chip}
+                onClick={() => sendMessage(chip)}
+                style={{
+                  padding: "7px 14px",
+                  borderRadius: "20px",
+                  border: "1px solid rgba(79,70,229,0.3)",
+                  backgroundColor: "rgba(79,70,229,0.06)",
+                  color: "var(--primary)",
+                  fontSize: "12.5px",
+                  fontWeight: "600",
+                  cursor: "pointer",
+                  transition: "all 0.15s ease",
+                  whiteSpace: "nowrap",
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.backgroundColor = "rgba(79,70,229,0.14)";
+                  e.target.style.borderColor = "var(--primary)";
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.backgroundColor = "rgba(79,70,229,0.06)";
+                  e.target.style.borderColor = "rgba(79,70,229,0.3)";
+                }}
+              >
+                {chip}
+              </button>
+            ))}
+          </div>
+        )}
+
+        <div ref={bottomRef} />
+      </div>
+
+      {/* Input area */}
+      <div
+        style={{
+          padding: "16px 24px",
+          borderTop: "1px solid var(--border-color)",
+          backgroundColor: "#ffffff",
+          display: "flex",
+          gap: "12px",
+          alignItems: "flex-end",
+        }}
+      >
+        <textarea
+          id="copilot-input"
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyDown={handleKeyDown}
+          placeholder="Ask about this audit... (Press Enter to send)"
+          rows={1}
+          disabled={loading || !runId}
+          style={{
+            flex: 1,
+            resize: "none",
+            border: "1px solid var(--border-color)",
+            borderRadius: "var(--radius-md)",
+            padding: "10px 14px",
+            fontSize: "13.5px",
+            fontFamily: "inherit",
+            color: "var(--text-main)",
+            backgroundColor: loading ? "#f5f5f5" : "#fafbfc",
+            outline: "none",
+            transition: "border-color 0.15s ease",
+            lineHeight: "1.5",
+          }}
+          onFocus={(e) => (e.target.style.borderColor = "var(--primary)")}
+          onBlur={(e) => (e.target.style.borderColor = "var(--border-color)")}
+        />
+        <button
+          onClick={() => sendMessage()}
+          disabled={loading || !input.trim() || !runId}
+          style={{
+            padding: "10px 20px",
+            borderRadius: "var(--radius-md)",
+            border: "none",
+            backgroundColor: loading || !input.trim() || !runId ? "#e5e7eb" : "var(--primary)",
+            color: loading || !input.trim() || !runId ? "var(--text-muted)" : "#ffffff",
+            fontSize: "14px",
+            fontWeight: "700",
+            cursor: loading || !input.trim() || !runId ? "not-allowed" : "pointer",
+            transition: "all 0.15s ease",
+            whiteSpace: "nowrap",
+            letterSpacing: "0.2px",
+          }}
+          onMouseEnter={(e) => {
+            if (!loading && input.trim() && runId) e.target.style.backgroundColor = "var(--primary-hover)";
+          }}
+          onMouseLeave={(e) => {
+            if (!loading && input.trim() && runId) e.target.style.backgroundColor = "var(--primary)";
+          }}
+        >
+          {loading ? "Thinking…" : "Ask ↵"}
+        </button>
+      </div>
+
+      {!runId && (
+        <div
+          style={{
+            padding: "10px 24px",
+            backgroundColor: "var(--color-missing-bg)",
+            borderTop: "1px solid var(--color-missing-border)",
+            fontSize: "12px",
+            color: "var(--color-missing)",
+            fontWeight: "600",
+          }}
+        >
+          ⚠ This run was not saved to the database. Copilot is unavailable without a Run ID.
+        </div>
+      )}
+
+      <style>{`
+        @keyframes bounce {
+          0%, 80%, 100% { transform: translateY(0); }
+          40% { transform: translateY(-6px); }
+        }
+      `}</style>
+    </div>
+  );
+}
 
 function Results() {
   const { analysisResult, clearAnalysisResult } = useContext(AnalysisContext);
@@ -373,6 +780,10 @@ function Results() {
             </div>
           </div>
         </div>
+
+        {/* AI Copilot Chat Panel */}
+        <CopilotPanel runId={analysisResult.id || null} token={token} />
+
         {/* Missing Assets Table */}
         <TableCard
           title="Missing Assets"

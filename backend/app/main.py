@@ -2,6 +2,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from app.routes.upload import router as upload_router
 from app.routes.auth import router as auth_router
+from app.routes.copilot import router as copilot_router
 from dotenv import load_dotenv
 import os
 from app.database import engine, Base, SessionLocal
@@ -42,6 +43,7 @@ app.add_middleware(
 
 app.include_router(auth_router)
 app.include_router(upload_router)
+app.include_router(copilot_router)
 
 @app.get("/")
 def root():
