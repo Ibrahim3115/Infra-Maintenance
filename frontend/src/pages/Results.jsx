@@ -1,159 +1,549 @@
 import { useContext } from "react";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import { AnalysisContext } from "../context/AnalysisContext";
+import PageContainer from "../components/PageContainer";
+import TableCard from "../components/TableCard";
+import EmptyState from "../components/EmptyState";
 
 function Results() {
-  const { analysisResult } = useContext(AnalysisContext);
+  const { analysisResult, clearAnalysisResult } = useContext(AnalysisContext);
+  const navigate = useNavigate();
+
+  const getFallbackInsights = (result) => {
+    const missingCount = result.missing_assets?.length ?? 0;
+    const extraCount = result.extra_assets?.length ?? 0;
+    const mismatchCount = result.naming_mismatches?.length ?? 0;
+    const totalDiscrepancies = missingCount + extraCount + mismatchCount;
+    const cmdbCount = result.total_cmdb_assets ?? 0;
+    const liveCount = result.total_live_assets ?? 0;
+
+    if (totalDiscrepancies === 0) {
+      return {
+        executive_summary: `Inventory reconciliation completed successfully. Both the CMDB registry (${cmdbCount} assets) and the live environment (${liveCount} assets) are perfectly aligned. No discrepancies were detected.`,
+        risk_level: "Low",
+        root_cause_analysis: "Infrastructure registers are fully synchronized with active environments. Systems are operating in a healthy state.",
+        recommended_actions: [
+          "Maintain current inventory reporting and verification frequency.",
+          "Continue enforcing automated configuration management checks."
+        ]
+      };
+    } else if (totalDiscrepancies > 5) {
+      return {
+        executive_summary: `Critical inventory discrepancies detected: ${missingCount} missing, ${extraCount} extra, and ${mismatchCount} naming mismatches. Immediate corrective action is recommended to align CMDB logs with active network assets.`,
+        risk_level: "High",
+        root_cause_analysis: "Potential breakdown in the provisioning or decommissioning change management pipeline. Unregistered virtual machines or active services may have been started without standard configuration logs, or offline systems were not cleaned up from CMDB logs.",
+        recommended_actions: [
+          "Perform immediate forensic auditing on the unregistered extra assets.",
+          "Re-verify if the missing assets are decommissioned or experiencing connectivity issues.",
+          "Standardize asset registration procedures within the deployment pipeline."
+        ]
+      };
+    } else {
+      return {
+        executive_summary: `Moderate inventory discrepancies detected: ${missingCount} missing, ${extraCount} extra, and ${mismatchCount} naming mismatches. Standard maintenance review is advised.`,
+        risk_level: "Medium",
+        root_cause_analysis: "Minor synchronization lag between active environment configuration registers and live tracking systems. This is typically caused by batch synchronization cycles or minor naming updates not fully propagating.",
+        recommended_actions: [
+          "Audit naming mismatches and synchronize live hostnames with CMDB registers.",
+          "Verify network reachability for missing hostnames.",
+          "Update registry entries for verified extra assets."
+        ]
+      };
+    }
+  };
+
+  const handleClear = () => {
+    if (window.confirm("Are you sure you want to clear all reconciliation results?")) {
+      clearAnalysisResult();
+      navigate("/");
+    }
+  };
 
   if (!analysisResult) {
     return (
-      <div style={{ padding: "40px", textAlign: "center", fontFamily: "'Inter', system-ui, -apple-system, sans-serif" }}>
-        <h1 style={{ color: "#0f172a" }}>Reconciliation Results</h1>
-        <div
-          style={{
-            marginTop: "30px",
-            padding: "30px",
-            border: "1px dashed #cbd5e1",
-            borderRadius: "8px",
-            backgroundColor: "#f8fafc",
-            display: "inline-block",
-            maxWidth: "500px",
-          }}
-        >
-          <p style={{ color: "#64748b", fontSize: "16px", marginBottom: "20px" }}>
-            No reconciliation results available. Please upload inventory files.
-          </p>
-          <Link
-            to="/upload"
-            style={{
-              padding: "10px 20px",
-              backgroundColor: "#2563eb",
-              color: "#ffffff",
-              textDecoration: "none",
-              borderRadius: "4px",
-              fontWeight: "600",
-            }}
-          >
-            Go to Upload
-          </Link>
-        </div>
-      </div>
+      <PageContainer title="Reconciliation Results">
+        <EmptyState
+          title="No Results Available"
+          description="You haven't uploaded state inventory files for processing yet."
+          actionText="Go to Upload"
+          onAction={() => navigate("/upload")}
+          icon="🔍"
+        />
+      </PageContainer>
     );
   }
 
-  const tableHeaderStyle = {
-    backgroundColor: "#f1f5f9",
-    color: "#334155",
-    padding: "12px 16px",
-    textAlign: "left",
-    fontWeight: "600",
-    borderBottom: "2px solid #e2e8f0",
-  };
+  const aiAnalysis = analysisResult.gemini_analysis || getFallbackInsights(analysisResult);
 
-  const tableCellStyle = {
-    padding: "12px 16px",
-    color: "#475569",
-    borderBottom: "1px solid #e2e8f0",
-  };
+  let riskColor = "var(--text-muted)";
+  let riskBg = "var(--border-color)";
+  let riskBorder = "var(--border-color)";
 
-  const renderTable = (headers, data, renderRow, emptyMessage) => {
-    if (!data || data.length === 0) {
-      return (
-        <div style={{ padding: "20px", backgroundColor: "#f8fafc", borderRadius: "6px", border: "1px solid #e2e8f0", color: "#64748b", fontSize: "14px" }}>
-          {emptyMessage}
-        </div>
-      );
+  const risk = aiAnalysis?.risk_level?.toLowerCase() || "";
+  if (risk === "low") {
+    riskColor = "var(--color-success)";
+    riskBg = "var(--color-success-bg)";
+    riskBorder = "rgba(34, 197, 94, 0.2)";
+  } else if (risk === "medium") {
+    riskColor = "var(--color-extra)";
+    riskBg = "var(--color-extra-bg)";
+    riskBorder = "var(--color-extra-border)";
+  } else if (risk === "high") {
+    riskColor = "var(--color-missing)";
+    riskBg = "var(--color-missing-bg)";
+    riskBorder = "var(--color-missing-border)";
+  }
+
+  const handleDownloadReport = () => {
+    if (!analysisResult.id) {
+      alert("No database Run ID found for this audit. Make sure the run was successfully saved.");
+      return;
     }
-
-    return (
-      <div style={{ overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: "6px", marginTop: "10px" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
-          <thead>
-            <tr>
-              {headers.map((h, i) => (
-                <th key={i} style={tableHeaderStyle}>{h}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {data.map((item, idx) => (
-              <tr key={idx}>{renderRow(item)}</tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    );
+    window.open(`http://127.0.0.1:8000/report/${analysisResult.id}`, "_blank");
   };
+
+  const headerActions = (
+    <div style={{ display: "flex", gap: "12px", alignItems: "center" }}>
+      {analysisResult.id && (
+        <button
+          onClick={handleDownloadReport}
+          style={{
+            padding: "10px 18px",
+            backgroundColor: "var(--primary)",
+            color: "#ffffff",
+            border: "none",
+            borderRadius: "var(--radius-sm)",
+            fontSize: "14px",
+            fontWeight: "600",
+            cursor: "pointer",
+            boxShadow: "0 2px 4px rgba(37, 99, 235, 0.15)",
+            transition: "all var(--transition-fast)",
+          }}
+          onMouseEnter={(e) => {
+            e.target.style.backgroundColor = "var(--primary-hover)";
+          }}
+          onMouseLeave={(e) => {
+            e.target.style.backgroundColor = "var(--primary)";
+          }}
+        >
+          Download PDF Report
+        </button>
+      )}
+      <button
+        onClick={handleClear}
+        style={{
+          padding: "10px 18px",
+          backgroundColor: "transparent",
+          color: "var(--color-missing)",
+          border: "1px solid var(--color-missing-border)",
+          borderRadius: "var(--radius-sm)",
+          fontSize: "14px",
+          fontWeight: "600",
+          cursor: "pointer",
+          transition: "all var(--transition-fast)",
+        }}
+        onMouseEnter={(e) => {
+          e.target.style.backgroundColor = "var(--color-missing-bg)";
+        }}
+        onMouseLeave={(e) => {
+          e.target.style.backgroundColor = "transparent";
+        }}
+      >
+        Clear Results
+      </button>
+    </div>
+  );
 
   return (
-    <div style={{ padding: "30px", fontFamily: "'Inter', system-ui, -apple-system, sans-serif", maxWidth: "1200px", margin: "0 auto" }}>
-      <h1 style={{ color: "#0f172a", marginBottom: "30px" }}>Reconciliation Results</h1>
-
-      {/* Missing Assets Section */}
-      <div style={{ marginTop: "30px" }}>
-        <h2 style={{ color: "#ef4444", borderBottom: "2px solid #fecaca", paddingBottom: "8px", fontSize: "20px" }}>
-          Missing Assets ({analysisResult.missing_assets?.length ?? 0})
-        </h2>
-        {renderTable(
-          ["Asset ID", "Asset Name"],
-          analysisResult.missing_assets,
-          (asset) => (
-            <>
-              <td style={tableCellStyle}><strong>{asset.asset_id}</strong></td>
-              <td style={tableCellStyle}>{asset.asset_name || asset.hostname || "N/A"}</td>
-            </>
-          ),
-          "No missing assets detected (intended assets match live inventory)."
+    <PageContainer
+      title="Reconciliation Results"
+      subtitle="Audited lists of differences discovered between configuration logs and active environments"
+      action={headerActions}
+    >
+      <div className="fade-in">
+        {/* Run Metadata Banner */}
+        {analysisResult.id && (
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              backgroundColor: "var(--primary-light)",
+              border: "1px solid rgba(37, 99, 235, 0.2)",
+              borderRadius: "var(--radius-md)",
+              padding: "12px 24px",
+              marginBottom: "24px",
+              fontSize: "14px",
+              color: "var(--primary)",
+              fontWeight: "600",
+            }}
+          >
+            <span>Reconciliation Audit Run ID: #{analysisResult.id}</span>
+            <span>Audited At: {new Date(analysisResult.created_at).toLocaleString()}</span>
+          </div>
         )}
-      </div>
+        {/* AI Insights Card */}
+        <div
+          style={{
+            backgroundColor: "var(--bg-card)",
+            border: "1px solid var(--border-color)",
+            borderRadius: "var(--radius-lg)",
+            boxShadow: "var(--shadow-sm)",
+            overflow: "hidden",
+            marginBottom: "36px",
+          }}
+        >
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "10px",
+              padding: "20px 24px",
+              borderBottom: "1px solid var(--border-color)",
+              backgroundColor: "#fcfcfd",
+            }}
+          >
+            <span style={{ fontSize: "18px" }}>✨</span>
+            <h3
+              style={{
+                fontSize: "18px",
+                fontWeight: "700",
+                color: "var(--text-main)",
+                margin: 0,
+                letterSpacing: "-0.25px",
+              }}
+            >
+              Gemini AI Infrastructure Insights
+            </h3>
+          </div>
+          <div style={{ padding: "24px" }}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))",
+                gap: "32px",
+              }}
+            >
+              {/* Left Side: Summary & Risk */}
+              <div>
+                <div style={{ marginBottom: "24px" }}>
+                  <div
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: "700",
+                      color: "var(--text-muted)",
+                      textTransform: "uppercase",
+                      letterSpacing: "1px",
+                      marginBottom: "10px",
+                    }}
+                  >
+                    Risk Assessment
+                  </div>
+                  <span
+                    style={{
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "8px",
+                      padding: "6px 16px",
+                      borderRadius: "20px",
+                      backgroundColor: riskBg,
+                      color: riskColor,
+                      border: `1px solid ${riskBorder}`,
+                      fontSize: "13px",
+                      fontWeight: "700",
+                      textTransform: "uppercase",
+                    }}
+                  >
+                    <span
+                      style={{
+                        width: "8px",
+                        height: "8px",
+                        borderRadius: "50%",
+                        backgroundColor: riskColor,
+                      }}
+                    />
+                    {aiAnalysis.risk_level} Risk
+                  </span>
+                </div>
+                <div>
+                  <div
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: "700",
+                      color: "var(--text-muted)",
+                      textTransform: "uppercase",
+                      letterSpacing: "1px",
+                      marginBottom: "10px",
+                    }}
+                  >
+                    Executive Summary
+                  </div>
+                  <p
+                    style={{
+                      fontSize: "14px",
+                      color: "var(--text-main)",
+                      lineHeight: "1.6",
+                      fontWeight: "500",
+                      margin: 0,
+                    }}
+                  >
+                    {aiAnalysis.executive_summary}
+                  </p>
+                </div>
+              </div>
 
-      {/* Extra Assets Section */}
-      <div style={{ marginTop: "40px" }}>
-        <h2 style={{ color: "#f97316", borderBottom: "2px solid #ffedd5", paddingBottom: "8px", fontSize: "20px" }}>
-          Extra Assets ({analysisResult.extra_assets?.length ?? 0})
-        </h2>
-        {renderTable(
-          ["Asset ID", "Asset Name"],
-          analysisResult.extra_assets,
-          (asset) => (
+              {/* Right Side: Root Cause & Actions */}
+              <div>
+                <div style={{ marginBottom: "24px" }}>
+                  <div
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: "700",
+                      color: "var(--text-muted)",
+                      textTransform: "uppercase",
+                      letterSpacing: "1px",
+                      marginBottom: "10px",
+                    }}
+                  >
+                    Root Cause Analysis
+                  </div>
+                  <p
+                    style={{
+                      fontSize: "14px",
+                      color: "var(--text-muted)",
+                      lineHeight: "1.6",
+                      margin: 0,
+                    }}
+                  >
+                    {aiAnalysis.root_cause_analysis}
+                  </p>
+                </div>
+                <div>
+                  <div
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: "700",
+                      color: "var(--text-muted)",
+                      textTransform: "uppercase",
+                      letterSpacing: "1px",
+                      marginBottom: "10px",
+                    }}
+                  >
+                    Recommended Actions
+                  </div>
+                  <ul
+                    style={{
+                      listStyleType: "none",
+                      padding: 0,
+                      margin: 0,
+                    }}
+                  >
+                    {aiAnalysis.recommended_actions?.map((action, idx) => (
+                      <li
+                        key={idx}
+                        style={{
+                          fontSize: "13.5px",
+                          color: "var(--text-main)",
+                          display: "flex",
+                          alignItems: "flex-start",
+                          gap: "8px",
+                          marginBottom: "10px",
+                          lineHeight: "1.5",
+                        }}
+                      >
+                        <span
+                          style={{
+                            color: riskColor,
+                            fontWeight: "bold",
+                            fontSize: "16px",
+                            lineHeight: "1",
+                            marginTop: "-1px",
+                          }}
+                        >
+                          •
+                        </span>
+                        <span>{action}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+        {/* Missing Assets Table */}
+        <TableCard
+          title="Missing Assets"
+          badgeText={analysisResult.missing_assets?.length ?? 0}
+          badgeBgColor="var(--color-missing)"
+          headers={["Asset ID", "Intended Hostname", "Status Flag"]}
+          data={analysisResult.missing_assets}
+          emptyMessage="No missing assets detected. Live environment matches configuration registers."
+          renderRow={(asset) => (
             <>
-              <td style={tableCellStyle}><strong>{asset.asset_id}</strong></td>
-              <td style={tableCellStyle}>{asset.asset_name || asset.hostname || "N/A"}</td>
+              <td style={{ padding: "14px 24px", fontWeight: "600", color: "var(--color-missing)" }}>
+                {asset.asset_id}
+              </td>
+              <td style={{ padding: "14px 24px", color: "var(--text-muted)", fontWeight: "500" }}>
+                {asset.asset_name || asset.hostname || "N/A"}
+              </td>
+              <td style={{ padding: "14px 24px" }}>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                    padding: "4px 8px",
+                    backgroundColor: "var(--color-missing-bg)",
+                    color: "var(--color-missing)",
+                    border: "1px solid var(--color-missing-border)",
+                    borderRadius: "12px",
+                    fontWeight: "700",
+                  }}
+                >
+                  Missing Offline
+                </span>
+              </td>
             </>
-          ),
-          "No extra assets detected (no unexpected live assets found)."
-        )}
-      </div>
+          )}
+        />
 
-      {/* Naming Mismatches Section */}
-      <div style={{ marginTop: "40px" }}>
-        <h2 style={{ color: "#eab308", borderBottom: "2px solid #fef9c3", paddingBottom: "8px", fontSize: "20px" }}>
-          Naming Mismatches ({analysisResult.naming_mismatches?.length ?? 0})
-        </h2>
-        {renderTable(
-          ["Asset ID", "Intended (CMDB) Name", "Live Name"],
-          analysisResult.naming_mismatches,
-          (mismatch) => (
+        {/* Extra Assets Table */}
+        <TableCard
+          title="Extra Live Assets"
+          badgeText={analysisResult.extra_assets?.length ?? 0}
+          badgeBgColor="var(--color-extra)"
+          headers={["Asset ID", "Discovered Hostname", "Status Flag"]}
+          data={analysisResult.extra_assets}
+          emptyMessage="No unexpected live assets found running."
+          renderRow={(asset) => (
             <>
-              <td style={tableCellStyle}><strong>{mismatch.asset_id}</strong></td>
-              <td style={tableCellStyle}><span style={{ color: "#ef4444" }}>{mismatch.cmdb_name}</span></td>
-              <td style={tableCellStyle}><span style={{ color: "#22c55e" }}>{mismatch.live_name}</span></td>
+              <td style={{ padding: "14px 24px", fontWeight: "600", color: "var(--color-extra)" }}>
+                {asset.asset_id}
+              </td>
+              <td style={{ padding: "14px 24px", color: "var(--text-muted)", fontWeight: "500" }}>
+                {asset.asset_name || asset.hostname || "N/A"}
+              </td>
+              <td style={{ padding: "14px 24px" }}>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                    padding: "4px 8px",
+                    backgroundColor: "var(--color-extra-bg)",
+                    color: "var(--color-extra)",
+                    border: "1px solid var(--color-extra-border)",
+                    borderRadius: "12px",
+                    fontWeight: "700",
+                  }}
+                >
+                  Unregistered Live
+                </span>
+              </td>
             </>
-          ),
-          "No naming mismatches detected."
-        )}
-      </div>
+          )}
+        />
 
-      {/* Local AI Summary (No Gemini API integration) */}
-      <div style={{ marginTop: "50px", border: "1px solid #e2e8f0", padding: "20px", borderRadius: "8px", backgroundColor: "#f8fafc" }}>
-        <h3 style={{ color: "#0f172a", marginTop: 0, fontSize: "16px", fontWeight: "600" }}>System Reconciliation Summary</h3>
-        <p style={{ color: "#475569", lineHeight: "1.6", margin: "10px 0 0 0" }}>
-          The analysis processed <strong>{analysisResult.total_cmdb_assets}</strong> intended CMDB assets and <strong>{analysisResult.total_live_assets}</strong> active live assets. 
-          There are <strong>{analysisResult.missing_assets?.length ?? 0}</strong> missing assets, <strong>{analysisResult.extra_assets?.length ?? 0}</strong> extra assets, and <strong>{analysisResult.naming_mismatches?.length ?? 0}</strong> naming mismatches. 
-          Please review the details in the tables above and sync the inventory systems.
-        </p>
+        {/* Naming Mismatches Table */}
+        <TableCard
+          title="Naming Mismatches"
+          badgeText={analysisResult.naming_mismatches?.length ?? 0}
+          badgeBgColor="var(--color-mismatch)"
+          headers={["Asset ID", "CMDB Name", "Live Name", "Status Flag"]}
+          data={analysisResult.naming_mismatches}
+          emptyMessage="No name mismatches detected on common identifiers."
+          renderRow={(mismatch) => (
+            <>
+              <td style={{ padding: "14px 24px", fontWeight: "600", color: "var(--text-main)" }}>
+                {mismatch.asset_id}
+              </td>
+              <td style={{ padding: "14px 24px" }}>
+                <div
+                  style={{
+                    display: "inline-block",
+                    padding: "4px 10px",
+                    backgroundColor: "var(--color-missing-bg)",
+                    color: "var(--color-missing)",
+                    border: "1px solid var(--color-missing-border)",
+                    borderRadius: "var(--radius-sm)",
+                    fontSize: "13px",
+                    fontWeight: "600",
+                  }}
+                >
+                  {mismatch.cmdb_name}
+                </div>
+              </td>
+              <td style={{ padding: "14px 24px" }}>
+                <div
+                  style={{
+                    display: "inline-block",
+                    padding: "4px 10px",
+                    backgroundColor: "var(--color-success-bg)",
+                    color: "var(--color-success)",
+                    border: "1px solid rgba(34, 197, 94, 0.2)",
+                    borderRadius: "var(--radius-sm)",
+                    fontSize: "13px",
+                    fontWeight: "600",
+                  }}
+                >
+                  {mismatch.live_name}
+                </div>
+              </td>
+              <td style={{ padding: "14px 24px" }}>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    textTransform: "uppercase",
+                    letterSpacing: "0.5px",
+                    padding: "4px 8px",
+                    backgroundColor: "var(--color-mismatch-bg)",
+                    color: "var(--color-mismatch)",
+                    border: "1px solid var(--color-mismatch-border)",
+                    borderRadius: "12px",
+                    fontWeight: "700",
+                  }}
+                >
+                  Conflict
+                </span>
+              </td>
+            </>
+          )}
+        />
+
+        {/* System Summary Card */}
+        <div
+          style={{
+            backgroundColor: "var(--bg-card)",
+            border: "1px solid var(--border-color)",
+            padding: "28px",
+            borderRadius: "var(--radius-lg)",
+            boxShadow: "var(--shadow-sm)",
+            lineHeight: "1.6",
+          }}
+        >
+          <h3
+            style={{
+              color: "var(--text-main)",
+              marginTop: 0,
+              fontSize: "16px",
+              fontWeight: "700",
+              marginBottom: "12px",
+            }}
+          >
+            Auditing Summary Notes
+          </h3>
+          <p style={{ color: "var(--text-muted)", fontSize: "14px" }}>
+            Reconciled <strong>{analysisResult.total_cmdb_assets}</strong> registered items against{" "}
+            <strong>{analysisResult.total_live_assets}</strong> live endpoints. There are currently{" "}
+            <strong>{analysisResult.missing_assets?.length ?? 0}</strong> offline failures,{" "}
+            <strong>{analysisResult.extra_assets?.length ?? 0}</strong> unknown instances, and{" "}
+            <strong>{analysisResult.naming_mismatches?.length ?? 0}</strong> naming configuration errors. Use these tables
+            to run inventory corrections.
+          </p>
+        </div>
       </div>
-    </div>
+    </PageContainer>
   );
 }
 
