@@ -4,6 +4,69 @@ import { Link } from "react-router-dom";
 import PageContainer from "../components/PageContainer";
 import StatCard from "../components/StatCard";
 import LoadingSpinner from "../components/LoadingSpinner";
+import {
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  BarChart,
+  Bar,
+} from "recharts";
+
+// Custom tooltips for Recharts
+const CustomTooltip = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div
+        style={{
+          backgroundColor: "#ffffff",
+          border: "1px solid var(--border-color)",
+          borderRadius: "var(--radius-sm)",
+          padding: "12px 16px",
+          boxShadow: "var(--shadow-md)",
+          fontSize: "13px",
+        }}
+      >
+        <p style={{ fontWeight: "700", color: "var(--text-main)", marginBottom: "4px" }}>{label}</p>
+        <p style={{ color: "var(--primary)", fontWeight: "600" }}>
+          Issues: <span style={{ fontSize: "14px" }}>{payload[0].value}</span>
+        </p>
+      </div>
+    );
+  }
+  return null;
+};
+
+const CustomBarTooltip = ({ active, payload, label }) => {
+  if (active && payload && payload.length) {
+    return (
+      <div
+        style={{
+          backgroundColor: "#ffffff",
+          border: "1px solid var(--border-color)",
+          borderRadius: "var(--radius-sm)",
+          padding: "12px 16px",
+          boxShadow: "var(--shadow-md)",
+          fontSize: "13px",
+        }}
+      >
+        <p style={{ fontWeight: "700", color: "var(--text-main)", marginBottom: "4px" }}>{label}</p>
+        <p style={{ color: payload[0].payload.color, fontWeight: "600" }}>
+          Runs: <span style={{ fontSize: "14px" }}>{payload[0].value}</span>
+        </p>
+      </div>
+    );
+  }
+  return null;
+};
+
 
 function Dashboard() {
   const { analysisResult, clearAnalysisResult } = useContext(AnalysisContext);
@@ -208,6 +271,226 @@ function Dashboard() {
           indicatorColor="var(--color-mismatch)"
           description="Asset IDs match but names differ"
         />
+      </div>
+
+      {/* Analytics Charts Grid */}
+      <div style={{ marginBottom: "40px" }}>
+        <h2
+          style={{
+            fontSize: "20px",
+            fontWeight: "700",
+            color: "var(--text-main)",
+            marginBottom: "20px",
+            letterSpacing: "-0.5px",
+          }}
+        >
+          Reconciliation Analytics
+        </h2>
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+            gap: "24px",
+          }}
+        >
+          {/* Pie Chart Card */}
+          <div
+            style={{
+              backgroundColor: "var(--bg-card)",
+              border: "1px solid var(--border-color)",
+              borderRadius: "var(--radius-lg)",
+              padding: "24px",
+              boxShadow: "var(--shadow-sm)",
+              display: "flex",
+              flexDirection: "column",
+              minHeight: "380px",
+            }}
+          >
+            <h3 style={{ fontSize: "16px", fontWeight: "700", color: "var(--text-main)", marginBottom: "4px" }}>
+              Discrepancy Breakdown
+            </h3>
+            <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "16px" }}>
+              Current run metrics
+            </p>
+            {!activeRun ? (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, color: "var(--text-muted)", fontSize: "14px", textAlign: "center" }}>
+                <span style={{ fontSize: "40px", marginBottom: "12px" }}>📊</span>
+                <p style={{ fontWeight: "600", color: "var(--text-main)", marginBottom: "4px" }}>No Active Data</p>
+                <p style={{ maxWidth: "240px", fontSize: "12px" }}>Upload inventory files to analyze discrepancy types.</p>
+              </div>
+            ) : (missingCount + extraCount + mismatchCount === 0) ? (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, color: "var(--text-muted)", fontSize: "14px", textAlign: "center" }}>
+                <span style={{ fontSize: "40px", marginBottom: "12px" }}>✅</span>
+                <p style={{ fontWeight: "600", color: "var(--color-success)", marginBottom: "4px" }}>Clean Run</p>
+                <p style={{ maxWidth: "240px", fontSize: "12px" }}>Zero discrepancies detected! All assets are fully matched.</p>
+              </div>
+            ) : (
+              <div style={{ flex: 1, minHeight: "260px" }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={[
+                        { name: "Missing Assets", value: missingCount, color: "var(--color-missing)" },
+                        { name: "Extra Assets", value: extraCount, color: "var(--color-extra)" },
+                        { name: "Naming Mismatches", value: mismatchCount, color: "var(--color-mismatch)" }
+                      ].filter(d => d.value > 0)}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={60}
+                      outerRadius={80}
+                      paddingAngle={4}
+                      dataKey="value"
+                    >
+                      {[
+                        { name: "Missing Assets", value: missingCount, color: "var(--color-missing)" },
+                        { name: "Extra Assets", value: extraCount, color: "var(--color-extra)" },
+                        { name: "Naming Mismatches", value: mismatchCount, color: "var(--color-mismatch)" }
+                      ].filter(d => d.value > 0).map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                    <Tooltip
+                      content={({ active, payload }) => {
+                        if (active && payload && payload.length) {
+                          const data = payload[0].payload;
+                          return (
+                            <div style={{ backgroundColor: "#ffffff", border: "1px solid var(--border-color)", borderRadius: "var(--radius-sm)", padding: "8px 12px", boxShadow: "var(--shadow-md)", fontSize: "12px" }}>
+                              <p style={{ fontWeight: "700", color: data.color }}>{data.name}</p>
+                              <p style={{ fontWeight: "600", color: "var(--text-main)" }}>Count: {data.value}</p>
+                            </div>
+                          );
+                        }
+                        return null;
+                      }}
+                    />
+                    <Legend verticalAlign="bottom" height={36} iconType="circle" />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+
+          {/* Trend Line Chart Card */}
+          <div
+            style={{
+              backgroundColor: "var(--bg-card)",
+              border: "1px solid var(--border-color)",
+              borderRadius: "var(--radius-lg)",
+              padding: "24px",
+              boxShadow: "var(--shadow-sm)",
+              display: "flex",
+              flexDirection: "column",
+              minHeight: "380px",
+            }}
+          >
+            <h3 style={{ fontSize: "16px", fontWeight: "700", color: "var(--text-main)", marginBottom: "4px" }}>
+              Discrepancy Trend
+            </h3>
+            <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "16px" }}>
+              Total issues across last 10 runs
+            </p>
+            {history.length === 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, color: "var(--text-muted)", fontSize: "14px", textAlign: "center" }}>
+                <span style={{ fontSize: "40px", marginBottom: "12px" }}>📈</span>
+                <p style={{ fontWeight: "600", color: "var(--text-main)", marginBottom: "4px" }}>No History Available</p>
+                <p style={{ maxWidth: "240px", fontSize: "12px" }}>Historical trend will populate as you perform audits.</p>
+              </div>
+            ) : (
+              <div style={{ flex: 1, minHeight: "260px" }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart
+                    data={[...history]
+                      .slice(0, 10)
+                      .reverse()
+                      .map(run => ({
+                        name: new Date(run.created_at).toLocaleDateString(undefined, {
+                          month: "short",
+                          day: "numeric",
+                          hour: "2-digit",
+                          minute: "2-digit"
+                        }),
+                        issues: (run.missing_count ?? 0) + (run.extra_count ?? 0) + (run.mismatch_count ?? 0)
+                      }))}
+                    margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="name" stroke="var(--text-muted)" fontSize={11} tickLine={false} />
+                    <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+                    <Tooltip content={<CustomTooltip />} />
+                    <Line type="monotone" dataKey="issues" stroke="var(--primary)" strokeWidth={3} activeDot={{ r: 6 }} dot={{ strokeWidth: 2, r: 4 }} />
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+
+          {/* Risk Distribution Card */}
+          <div
+            style={{
+              backgroundColor: "var(--bg-card)",
+              border: "1px solid var(--border-color)",
+              borderRadius: "var(--radius-lg)",
+              padding: "24px",
+              boxShadow: "var(--shadow-sm)",
+              display: "flex",
+              flexDirection: "column",
+              minHeight: "380px",
+            }}
+          >
+            <h3 style={{ fontSize: "16px", fontWeight: "700", color: "var(--text-main)", marginBottom: "4px" }}>
+              Risk Distribution
+            </h3>
+            <p style={{ fontSize: "12px", color: "var(--text-muted)", marginBottom: "16px" }}>
+              Reconciliation run risk profiles
+            </p>
+            {history.length === 0 ? (
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flex: 1, color: "var(--text-muted)", fontSize: "14px", textAlign: "center" }}>
+                <span style={{ fontSize: "40px", marginBottom: "12px" }}>🛡️</span>
+                <p style={{ fontWeight: "600", color: "var(--text-main)", marginBottom: "4px" }}>No Risk Metrics</p>
+                <p style={{ maxWidth: "240px", fontSize: "12px" }}>Upload reconciliation files to evaluate risk ratings.</p>
+              </div>
+            ) : (
+              <div style={{ flex: 1, minHeight: "260px" }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart
+                    data={[
+                      {
+                        name: "Low Risk",
+                        count: history.filter(run => (run.gemini_risk_level?.toLowerCase() || "") === "low").length,
+                        color: "var(--color-success)"
+                      },
+                      {
+                        name: "Medium Risk",
+                        count: history.filter(run => (run.gemini_risk_level?.toLowerCase() || "") === "medium").length,
+                        color: "var(--color-extra)"
+                      },
+                      {
+                        name: "High Risk",
+                        count: history.filter(run => (run.gemini_risk_level?.toLowerCase() || "") === "high").length,
+                        color: "var(--color-missing)"
+                      }
+                    ]}
+                    margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
+                    <XAxis dataKey="name" stroke="var(--text-muted)" fontSize={11} tickLine={false} />
+                    <YAxis stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={false} allowDecimals={false} />
+                    <Tooltip cursor={{ fill: 'rgba(0, 0, 0, 0.02)' }} content={<CustomBarTooltip />} />
+                    <Bar dataKey="count" radius={[4, 4, 0, 0]}>
+                      {[
+                        { color: "var(--color-success)" },
+                        { color: "var(--color-extra)" },
+                        { color: "var(--color-missing)" }
+                      ].map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       {/* Main Status Container */}
